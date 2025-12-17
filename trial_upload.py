@@ -10,13 +10,12 @@ import io
 # Load environment variables
 load_dotenv()
 
-SUPABASE_URL = st.secrets("SUPABASE_URL")
-SUPABASE_KEY = st.secrets("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 ROLES = ["admin", "teacher"]
-
 
 # -----------------------------
 # Internal helper for safe requests
@@ -32,20 +31,22 @@ def _safe_execute(request):
         st.error(f"⚠️ Database error: {str(e)}")
         return []
 
-
 # -----------------------------
 # Teachers CRUD
 # -----------------------------
 def get_teachers():
     """Return all teacher profiles with assigned classes."""
-    return _safe_execute(supabase.table("profiles").select("*").eq("role", "teacher"))
-
+    return _safe_execute(
+        supabase.table("profiles")
+        .select("*")
+        .eq("role", "teacher")
+    )
 
 def create_teacher(full_name: str, email: str, password: str, classes: list = None):
     """
-    Create a new teacher:
+    Create a new teacher: 
     1. Create auth user via Service Role
-    2. Insert profile with role=teacher, assigned classes, and auth_user_id
+    2. Insert profile with role=teacher and assigned classes
     """
     if not full_name or not email or not password:
         st.error("Full Name, Email, and Password are required.")
@@ -53,17 +54,19 @@ def create_teacher(full_name: str, email: str, password: str, classes: list = No
 
     try:
         # 1️⃣ Create auth user
-        user_resp = supabase.auth.admin.create_user(
-            {"email": email, "password": password, "email_confirm": True}
-        )
+        user_resp = supabase.auth.admin.create_user({
+            "email": email,
+            "password": password,
+            "email_confirm": True
+        })
         user_id = user_resp.user.id
 
-        # 2️⃣ Insert profile (auth_user_id links to auth.users)
+        # 2️⃣ Insert profile
         data = {
+            "id": user_id,
             "full_name": full_name.strip(),
             "role": "teacher",
-            "assigned_classes": classes or [],
-            "auth_user_id": user_id,  # <-- fix
+            "assigned_classes": classes or []
         }
 
         return _safe_execute(supabase.table("profiles").insert(data))
@@ -71,54 +74,40 @@ def create_teacher(full_name: str, email: str, password: str, classes: list = No
         st.error(f"⚠️ Failed to create teacher: {str(e)}")
         return []
 
-
-def update_teacher(
-    auth_user_id: str,
-    full_name: str,
-    email: str = None,
-    password: str = None,
-    classes: list = None,
-    role: str = "teacher",
-):
+def update_teacher(user_id: str, full_name: str, email: str = None, password: str = None, classes: list = None, role: str = "teacher"):
     """Update teacher profile and optionally password."""
     if role not in ROLES:
         st.error("Invalid role selected.")
         return []
 
     try:
-        # Update profile using auth_user_id
+        # Update profile
         data = {"full_name": full_name.strip(), "role": role}
         if classes is not None:
             data["assigned_classes"] = classes
         if email:
             data["email"] = email.strip()
 
-        _safe_execute(
-            supabase.table("profiles").update(data).eq("auth_user_id", auth_user_id)
-        )
+        _safe_execute(supabase.table("profiles").update(data).eq("id", user_id))
 
         # Update password if provided
         if password:
-            supabase.auth.admin.update_user(auth_user_id, password=password)
+            supabase.auth.admin.update_user(user_id, password=password)
 
         return True
     except Exception as e:
         st.error(f"⚠️ Failed to update teacher: {str(e)}")
         return []
 
-
-def delete_teacher(auth_user_id: str):
+def delete_teacher(user_id: str):
     """Delete teacher from profiles and auth.users."""
     try:
-        _safe_execute(
-            supabase.table("profiles").delete().eq("auth_user_id", auth_user_id)
-        )
-        supabase.auth.admin.delete_user(auth_user_id)
+        _safe_execute(supabase.table("profiles").delete().eq("id", user_id))
+        supabase.auth.admin.delete_user(user_id)
         return True
     except Exception as e:
         st.error(f"⚠️ Failed to delete teacher: {str(e)}")
         return []
-
 
 # -----------------------------
 # Bulk upload
@@ -136,14 +125,12 @@ def bulk_create_teachers(csv_file):
         reader = csv.DictReader(decoded)
         results = []
         for row in reader:
-            class_list = [
-                c.strip() for c in row.get("classes", "").split(",") if c.strip()
-            ]
+            class_list = [c.strip() for c in row.get("classes", "").split(",") if c.strip()]
             res = create_teacher(
                 full_name=row["full_name"],
                 email=row["email"],
                 password=row["password"],
-                classes=class_list,
+                classes=class_list
             )
             results.append(res)
         st.success(f"{len(results)} teachers added successfully!")

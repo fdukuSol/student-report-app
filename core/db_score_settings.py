@@ -7,8 +7,8 @@ import httpx
 
 load_dotenv()
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_URL = st.secrets("SUPABASE_URL")
+SUPABASE_KEY = st.secrets("SUPABASE_SERVICE_ROLE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 ACADEMIC_LEVELS = ["Nursery", "KG", "Lower Primary", "Upper Primary", "JHS"]

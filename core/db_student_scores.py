@@ -3,11 +3,12 @@ from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
 import httpx
+import streamlit as st
 
 load_dotenv()
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_URL = st.secrets("SUPABASE_URL")
+SUPABASE_KEY = st.secrets("SUPABASE_SERVICE_ROLE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
